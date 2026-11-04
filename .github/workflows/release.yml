@@ -42,19 +42,15 @@ jobs:
       - name: Write local.properties
         working-directory: app
         run: printf 'sdk.dir=%s\nflutter.sdk=%s\n' "$ANDROID_HOME" "$FLUTTER_ROOT" > android/local.properties
-      - name: Build debug APK via Gradle directly
+      - name: Build debug APK
         working-directory: app/android
-        run: gradle assembleArm64Debug --stacktrace 2>&1 | tee /tmp/gradle.log; exit ${PIPESTATUS[0]}
-      - name: Show Gradle errors on failure
-        if: failure()
-        run: grep -E "^e: |FAILED|> Task|Caused by:|Exception in|error:" /tmp/gradle.log | head -60 || tail -80 /tmp/gradle.log
+        run: gradle assembleArm64Debug --stacktrace
       - name: Locate APK
         id: apk
         run: |
           APK=$(find app/build -name "*.apk" | head -1)
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           echo "Found APK: $APK"
-          ls -lh "$APK" || true
       - name: Upload to release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
