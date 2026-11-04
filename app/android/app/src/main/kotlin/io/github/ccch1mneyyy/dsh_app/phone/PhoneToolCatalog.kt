@@ -22,6 +22,7 @@ object PhoneToolCatalog {
     const val KEY = "key"
     const val TAP_XY = "tap_xy"
     const val HANDOFF = "handoff"
+    const val ACT_GOAL = "act_goal"
 
     class Tool(val name: String, val description: String, val properties: Map<String, Any?>, val required: List<String>) {
         fun toJson(): Map<String, Any?> = linkedMapOf(
@@ -245,6 +246,18 @@ object PhoneToolCatalog {
             linkedMapOf("reason" to str("要用户做什么，一句话")),
             listOf("reason"),
         ),
+        Tool(
+            ACT_GOAL,
+            // l10n:keep agent tool catalog
+            "把局部目标交给 Jev 执行引擎：Jev 读屏、选元素、操作，直到完成或受阻（需配置 Jev）。返回 DONE / BLOCKED 和当前屏幕。不需要 Jev 时用 tap / scroll 逐步操作。",
+            linkedMapOf(
+                // l10n:keep agent tool catalog
+                "goal" to str("要完成的局部目标，明确说完成标准，如「找到并点击瑞幸咖啡科技园店进入详情」"),
+                // l10n:keep agent tool catalog
+                "max_steps" to int("最多执行几步（1–20），默认 8"),
+            ),
+            listOf("goal"),
+        ),
     )
 
     val names: List<String> = tools.map { it.name }
@@ -252,5 +265,5 @@ object PhoneToolCatalog {
     fun listJson(): List<Map<String, Any?>> = tools.map { it.toJson() }
 
     /** Tools that act on a screen through a [PhoneDriver] (need accessibility or the background display). */
-    val SCREEN_TOOLS = setOf(SCREEN, COLLECT, TAP, TYPE, SCROLL, KEY, TAP_XY, HANDOFF)
+    val SCREEN_TOOLS = setOf(SCREEN, COLLECT, TAP, TYPE, SCROLL, KEY, TAP_XY, HANDOFF, ACT_GOAL)
 }
