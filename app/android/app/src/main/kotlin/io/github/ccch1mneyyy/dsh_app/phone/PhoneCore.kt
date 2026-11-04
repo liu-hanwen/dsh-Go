@@ -57,6 +57,10 @@ class PhoneCore(
      */
     @Volatile private var refusal: Pair<PhoneTasks.Owner, HandoffCause>? = null
 
+    @Volatile var jevConfig: JevConfig = JevConfig.DISABLED
+
+    fun updateJevConfig(config: JevConfig) { jevConfig = config }
+
     private class Out(
         val text: String,
         val error: Boolean = false,
@@ -159,6 +163,7 @@ class PhoneCore(
             PhoneToolCatalog.TAP, PhoneToolCatalog.TYPE, PhoneToolCatalog.SCROLL, PhoneToolCatalog.TAP_XY -> act(name, a, scope)
             PhoneToolCatalog.KEY -> key(a)
             PhoneToolCatalog.HANDOFF -> handoff(a, scope)
+            PhoneToolCatalog.ACT_GOAL -> actGoal(a, scope)
             // l10n:keep agent tool result
             else -> Out("没有这个手机工具：$name", error = true)
         }
@@ -632,6 +637,92 @@ class PhoneCore(
         }
     }
 
+
+    /** Executes a local goal using the Jev decision model. Loops until DONE, BLOCKED, fallback, or max_steps. */
+    private fun actGoal(a: Args, scope: SerialWorker.Scope): Out {
+        val goal = a.str("goal") ?: return Out("act_goal 需要 goal（目标说明）。", error = true)
+        if (!jevConfig.isUsable) {
+            // l10n:keep agent tool result
+            return Out("Jev 未配置或未启用，请在手机操控设置中填写 Jev API 地址和密钥。", error = true, summary = "act_goal", decision = "unavailable")
+        }
+        val maxSteps = (a.int("max_steps") ?: 8).coerceIn(1, 20)
+        val driver = when (val d = driverFor(PhoneScreen.MAIN)) {
+            is Either.Left -> return Out(d.value, error = true, summary = "act_goal", decision = "unavailable")
+            is Either.Right -> d.value
+        }
+        if (env.isLocked()) return locked("act_goal")
+        lastScreen = PhoneScreen.MAIN
+        val owner = tasks.activeOwner() ?: return stoppedOut("act_goal")
+        val history = mutableListOf<String>()
+
+        repeat(maxSteps) { step ->
+            if (!tasks.isCurrent(owner) || Thread.currentThread().isInterrupted) return stoppedOut("act_goal")
+            if (tasks.isStopped()) return stoppedOut("act_goal")
+
+            // Observe current screen
+            val snap = try {
+                driver.observe(detail = false, image = false)
+            } catch (e: InterruptedException) {
+                throw e
+            } catch (e: Exception) {
+                return Out("读屏失败：${e.message}", error = true, summary = "act_goal (${step + 1}/$maxSteps)", decision = "error")
+            }
+            val filtered = safety.filterScreen(snap)
+            if (filtered !== snap) {
+                return Out("当前屏幕不允许操作。", error = true, screen = filtered, summary = "act_goal", decision = "refused:read")
+            }
+            tasks.setApp(snap.appLabel)
+
+            // Ask Jev
+            say(ui.get("phone_acting", "DSH 正在操作 · %1\$s", "Jev 步骤 ${step + 1}/${maxSteps}")) // l10n:keep test default
+            val decision = JevRunner.decide(goal, snap.text, snap.id, jevConfig, history)
+
+            when (decision) {
+                is JevDecision.Done -> return Out(
+                    // l10n:keep agent tool result
+                    "Jev 完成目标（共 ${step} 步）。",
+                    screen = filtered,
+                    summary = "act_goal: $goal".take(60),
+                    decision = "ok",
+                )
+                is JevDecision.Blocked -> return Out(
+                    // l10n:keep agent tool result
+                    "Jev 无法继续：${decision.reason}",
+                    error = true,
+                    screen = filtered,
+                    summary = "act_goal",
+                    decision = "blocked",
+                )
+                is JevDecision.Fallback -> return Out(
+                    // l10n:keep agent tool result
+                    "Jev 置信度不足，请用 tap / scroll 直接操作。当前屏幕：",
+                    error = true,
+                    screen = filtered,
+                    summary = "act_goal",
+                    decision = "fallback",
+                )
+                is JevDecision.Execute -> {
+                    val result = act(decision.toolName, Args(decision.args), scope)
+                    history += "步骤${step + 1}: ${decision.toolName}${decision.args} → ${if (result.error) "失败" else "成功"}"
+                    if (result.error) {
+                        return Out(
+                            result.text,
+                            error = true,
+                            screen = result.screen,
+                            summary = "act_goal",
+                            decision = "failed",
+                        )
+                    }
+                    // Continue loop
+                }
+            }
+        }
+
+        val finalSnap = try { safety.filterScreen(driver.observe(detail = false, image = false)) } catch (_: Exception) { null }
+        // l10n:keep agent tool result
+        return Out("Jev 达到最大步数 $maxSteps，停下来。", error = true, screen = finalSnap, summary = "act_goal", decision = "max_steps")
+    }
+
     private fun stoppedOut(summary: String) = Out(PhoneTasks.STOPPED_MESSAGE + "。", error = true,
         summary = summary, decision = "stopped")
 
@@ -656,6 +747,7 @@ class PhoneCore(
             PhoneToolCatalog.SCREEN -> 12_000L
             PhoneToolCatalog.COLLECT -> 120_000L
             PhoneToolCatalog.HANDOFF -> 30_000L
+            PhoneToolCatalog.ACT_GOAL -> 120_000L
             else -> 30_000L
         }
     }
