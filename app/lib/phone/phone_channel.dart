@@ -1076,6 +1076,28 @@ class PhoneChannel {
   Future<PhoneOverlayPrefs?> setOverlayPrefs({double? idleOpacity, bool? autoCollapse}) =>
       _overlay('setOverlayPrefs', {'idleOpacity': ?idleOpacity, 'autoCollapse': ?autoCollapse});
 
+  /// Pushes Jev config to the native phone engine.
+  Future<void> setJevConfig({
+    required bool enabled,
+    required String apiUrl,
+    required String apiKey,
+    required double confidenceThreshold,
+  }) async {
+    try {
+      await _methods.invokeMethod<void>('setJevConfig', {
+        'enabled': enabled,
+        'apiUrl': apiUrl,
+        'apiKey': apiKey,
+        'confidenceThreshold': confidenceThreshold,
+      });
+    } on MissingPluginException {
+      // Jev not available in this build.
+    } on PlatformException {
+      // Ignore.
+    }
+  }
+
+
   Future<PhoneOverlayPrefs?> _overlay(String method, [Object? args]) async {
     try {
       final map = await _methods.invokeMapMethod<Object?, Object?>(method, args);
