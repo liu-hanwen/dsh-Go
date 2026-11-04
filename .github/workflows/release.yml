@@ -42,9 +42,11 @@ jobs:
       - name: Write local.properties
         working-directory: app
         run: printf 'sdk.dir=%s\nflutter.sdk=%s\n' "$ANDROID_HOME" "$FLUTTER_ROOT" > android/local.properties
-      - name: Build debug APK (verbose)
+      - name: Build debug APK
         working-directory: app
-        run: flutter build apk --debug --target-platform android-arm64 --verbose 2>&1 | tee /tmp/flutter-build.log; EXIT=${PIPESTATUS[0]}; grep -E "e: |FAILED|error:|Caused by:|Exception in thread" /tmp/flutter-build.log | head -60 || true; exit $EXIT
+        run: |
+          flutter build apk --debug --target-platform android-arm64 --verbose 2>&1 | tee /tmp/build.log
+          grep -E "^e: |FAILED|Caused by:|Exception in thread" /tmp/build.log | head -40 || true
       - name: Upload to release
         if: success()
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
