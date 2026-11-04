@@ -26,6 +26,10 @@ class AppSettings {
     this.visualReplies = true,
     this.customProviderIds = const {},
     this.loaded = false,
+    this.jevEnabled = false,
+    this.jevApiUrl = 'https://api.typesafe.ai/v1/systemone',
+    this.jevApiKey = '',
+    this.jevConfidenceThreshold = 0.85,
   });
 
   final String apiKey;
@@ -70,6 +74,12 @@ class AppSettings {
   final Set<String> customProviderIds;
   final bool loaded;
 
+  /// Jev decision model configuration.
+  final bool jevEnabled;
+  final String jevApiUrl;
+  final String jevApiKey;
+  final double jevConfidenceThreshold;
+
   bool get hasApiKey => apiKey.trim().isNotEmpty;
 
   /// A DeepSeek key or a custom provider on the local engine.
@@ -89,6 +99,10 @@ class AppSettings {
     bool? visualReplies,
     Set<String>? customProviderIds,
     bool? loaded,
+    bool? jevEnabled,
+    String? jevApiUrl,
+    String? jevApiKey,
+    double? jevConfidenceThreshold,
   }) => AppSettings(
     apiKey: apiKey ?? this.apiKey,
     themeMode: themeMode ?? this.themeMode,
@@ -103,6 +117,10 @@ class AppSettings {
     visualReplies: visualReplies ?? this.visualReplies,
     customProviderIds: customProviderIds ?? this.customProviderIds,
     loaded: loaded ?? this.loaded,
+    jevEnabled: jevEnabled ?? this.jevEnabled,
+    jevApiUrl: jevApiUrl ?? this.jevApiUrl,
+    jevApiKey: jevApiKey ?? this.jevApiKey,
+    jevConfidenceThreshold: jevConfidenceThreshold ?? this.jevConfidenceThreshold,
   );
 }
 
@@ -125,6 +143,10 @@ class SettingsController extends Notifier<AppSettings> {
   static const _chatTextScaleKey = 'chat_text_scale';
   static const _foldTurnsKey = 'fold_completed_turns';
   static const _visualRepliesKey = 'visual_replies';
+  static const _jevApiKeyKey = 'jev_api_key';
+  static const _jevApiUrlKey = 'jev_api_url';
+  static const _jevEnabledKey = 'jev_enabled';
+  static const _jevConfidenceKey = 'jev_confidence_threshold';
   static const _secure = FlutterSecureStorage();
   late Future<void> _loaded;
 
@@ -145,6 +167,13 @@ class SettingsController extends Notifier<AppSettings> {
     String apiKey = '';
     try {
       apiKey = await _secure.read(key: _apiKeyKey) ?? '';
+    } catch (_) {
+      // Keystore unavailable or corrupted; the user can re-enter the key.
+    }
+    if (!ref.mounted) return;
+    String jevApiKey = '';
+    try {
+      jevApiKey = await _secure.read(key: _jevApiKeyKey) ?? '';
     } catch (_) {
       // Keystore unavailable or corrupted; the user can re-enter the key.
     }
@@ -173,6 +202,10 @@ class SettingsController extends Notifier<AppSettings> {
       visualReplies: prefs.getBool(_visualRepliesKey) ?? true,
       customProviderIds: providerIds,
       loaded: true,
+      jevEnabled: prefs.getBool(_jevEnabledKey) ?? false,
+      jevApiUrl: prefs.getString(_jevApiUrlKey) ?? 'https://api.typesafe.ai/v1/systemone',
+      jevApiKey: jevApiKey,
+      jevConfidenceThreshold: prefs.getDouble(_jevConfidenceKey) ?? 0.85,
     );
   }
 
@@ -261,6 +294,34 @@ class SettingsController extends Notifier<AppSettings> {
     state = state.copyWith(autoStartLocal: value, autoStartLocalExplicit: true);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_autoStartKey, value);
+  }
+
+  Future<void> setJevEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_jevEnabledKey, value);
+    state = state.copyWith(jevEnabled: value);
+  }
+
+  Future<void> setJevApiUrl(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_jevApiUrlKey, value);
+    state = state.copyWith(jevApiUrl: value);
+  }
+
+  Future<void> setJevApiKey(String key) async {
+    final trimmed = key.trim();
+    if (trimmed.isEmpty) {
+      await _secure.delete(key: _jevApiKeyKey);
+    } else {
+      await _secure.write(key: _jevApiKeyKey, value: trimmed);
+    }
+    state = state.copyWith(jevApiKey: trimmed);
+  }
+
+  Future<void> setJevConfidenceThreshold(double value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_jevConfidenceKey, value);
+    state = state.copyWith(jevConfidenceThreshold: value);
   }
 }
 
