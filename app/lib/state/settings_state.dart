@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../l10n/l10n.dart';
 import '../performance/performance_state.dart';
 import 'provider_keys.dart';
+import 'phone_state.dart';
 import 'read_list_epoch.dart';
 
 /// User settings: the DeepSeek API key (and custom-provider keys, see
@@ -207,6 +208,8 @@ class SettingsController extends Notifier<AppSettings> {
       jevApiKey: jevApiKey,
       jevConfidenceThreshold: prefs.getDouble(_jevConfidenceKey) ?? 0.85,
     );
+    // Only push to native when Jev is configured; avoids unexpected channel calls in tests.
+    if (state.jevEnabled) unawaited(_pushJevConfig());
   }
 
   /// Keeps [key] for the local engine's custom provider [id] (see
@@ -300,12 +303,14 @@ class SettingsController extends Notifier<AppSettings> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_jevEnabledKey, value);
     state = state.copyWith(jevEnabled: value);
+    unawaited(_pushJevConfig());
   }
 
   Future<void> setJevApiUrl(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_jevApiUrlKey, value);
     state = state.copyWith(jevApiUrl: value);
+    unawaited(_pushJevConfig());
   }
 
   Future<void> setJevApiKey(String key) async {
@@ -316,12 +321,25 @@ class SettingsController extends Notifier<AppSettings> {
       await _secure.write(key: _jevApiKeyKey, value: trimmed);
     }
     state = state.copyWith(jevApiKey: trimmed);
+    unawaited(_pushJevConfig());
   }
 
   Future<void> setJevConfidenceThreshold(double value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_jevConfidenceKey, value);
     state = state.copyWith(jevConfidenceThreshold: value);
+    unawaited(_pushJevConfig());
+  }
+
+  /// Pushes current Jev config to the native engine. Tolerates missing plugin.
+  Future<void> _pushJevConfig() async {
+    if (!ref.mounted) return;
+    await ref.read(phoneChannelProvider).setJevConfig(
+      enabled: state.jevEnabled,
+      apiUrl: state.jevApiUrl,
+      apiKey: state.jevApiKey,
+      confidenceThreshold: state.jevConfidenceThreshold,
+    );
   }
 }
 
