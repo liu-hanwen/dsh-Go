@@ -2,6 +2,7 @@ package io.github.ccch1mneyyy.dsh_app.phone
 
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -41,12 +42,17 @@ object JevClient {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json")
-        conn.setRequestProperty("Authorization", apiKey)
+        conn.setRequestProperty("Authorization", "Bearer $apiKey")
         conn.connectTimeout = TIMEOUT_MS
         conn.readTimeout = TIMEOUT_MS
         conn.doOutput = true
         OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(body) }
-        return BufferedReader(InputStreamReader(conn.inputStream, Charsets.UTF_8)).use { it.readText() }
+        val code = conn.responseCode
+        val stream = if (code in 200..299) conn.inputStream
+            else conn.errorStream ?: throw IOException("HTTP $code with no response body")
+        val responseText = BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+        if (code !in 200..299) throw IOException("HTTP $code: ${responseText.take(200)}")
+        return responseText
     }
 
     private fun parseResponse(text: String): JevChoice? {
