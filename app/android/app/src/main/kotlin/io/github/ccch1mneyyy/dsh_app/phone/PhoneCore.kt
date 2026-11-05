@@ -641,7 +641,8 @@ class PhoneCore(
     /** Executes a local goal using the Jev decision model. Loops until DONE, BLOCKED, fallback, or max_steps. */
     private fun actGoal(a: Args, scope: SerialWorker.Scope): Out {
         val goal = a.str("goal") ?: return Out("act_goal 需要 goal（目标说明）。", error = true)
-        if (!jevConfig.isUsable) {
+        val config = jevConfig  // Snapshot once; Dart side may update jevConfig mid-loop.
+        if (!config.isUsable) {
             // l10n:keep agent tool result
             return Out("Jev 未配置或未启用，请在手机操控设置中填写 Jev API 地址和密钥。", error = true, summary = "act_goal", decision = "unavailable")
         }
@@ -675,7 +676,7 @@ class PhoneCore(
 
             // Ask Jev
             say(ui.get("phone_acting", "DSH 正在操作 · %1\$s", "Jev 步骤 ${step + 1}/${maxSteps}")) // l10n:keep test default
-            val decision = JevRunner.decide(goal, snap.text, snap.id, jevConfig, history)
+            val decision = JevRunner.decide(goal, snap.text, snap.id, config, history)
 
             when (decision) {
                 is JevDecision.Done -> return Out(
