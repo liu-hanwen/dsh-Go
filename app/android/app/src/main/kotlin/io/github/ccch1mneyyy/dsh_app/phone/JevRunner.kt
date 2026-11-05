@@ -24,8 +24,8 @@ object JevRunner {
         history: List<String>,
     ): JevDecision {
         val elements = extractElements(screenText)
+        if (elements.isEmpty()) return JevDecision.Fallback  // No actionable elements on screen.
         val candidates = buildCandidates(elements, screenText)
-        if (candidates.size <= 2) return JevDecision.Fallback  // Only DONE/BLOCKED — no real choices.
 
         val state = buildState(goal, screenText, history)
         val choice = JevClient.decide(config, state, "根据目标和当前屏幕，选择下一步操作。", candidates)
