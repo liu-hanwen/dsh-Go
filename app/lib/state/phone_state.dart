@@ -10,6 +10,7 @@ import '../runtime/runtime_state.dart';
 import 'connection_state.dart';
 import 'engine_control.dart';
 import 'hosts_state.dart';
+import 'settings_state.dart';
 
 export '../phone/phone_channel.dart';
 
@@ -93,6 +94,22 @@ class PhoneController extends Notifier<PhoneState> {
     ref.onDispose(() => _sub?.cancel());
     unawaited(_loadDisclosure());
     unawaited(refresh());
+    // Push Jev config to native when settings load or any Jev field changes.
+    ref.listen(
+      settingsProvider.select(
+        (s) => (s.loaded, s.jevEnabled, s.jevApiUrl, s.jevApiKey, s.jevConfidenceThreshold),
+      ),
+      (_, next) {
+        if (!next.$1) return;
+        unawaited(_channel.setJevConfig(
+          enabled: next.$2,
+          apiUrl: next.$3,
+          apiKey: next.$4,
+          confidenceThreshold: next.$5,
+        ));
+      },
+      fireImmediately: true,
+    );
     return const PhoneState();
   }
 
