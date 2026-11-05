@@ -119,4 +119,20 @@ class PhoneToolSchemaTest {
         assertEquals(listOf(PhoneAction.TapXY("s1", 0, 0)), actions)
         assertEquals(1, confirmations)
     }
+
+    @Test fun actGoalRejectsWhenJevNotConfigured() {
+        val result = core.call(PhoneToolCatalog.ACT_GOAL, mapOf("goal" to "open the app"))
+        assertTrue(result.isError)
+        assertTrue(result.text.contains("Jev"))
+        assertTrue(actions.isEmpty())
+    }
+
+    @Test fun actGoalWithJevEnabledHitsMaxStepsAndReturnsFallbackWhenNoRealJev() {
+        // JevClient.decide() returns null (no network) → JevDecision.Fallback on step 1.
+        core.updateJevConfig(JevConfig(enabled = true, apiKey = "test-key", apiUrl = "http://localhost:0"))
+        val result = core.call(PhoneToolCatalog.ACT_GOAL, mapOf("goal" to "tap the button", "max_steps" to 1))
+        // With no real Jev endpoint, JevClient returns null → Fallback on first iteration.
+        assertTrue(result.isError)
+        assertTrue(actions.isEmpty())
+    }
 }
